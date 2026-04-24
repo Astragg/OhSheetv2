@@ -12,6 +12,23 @@ let simulationState = {
 const canvas = document.getElementById('world-canvas');
 const ctx = canvas.getContext('2d');
 
+// --- NEW: Initialization ---
+function initSimulation() {
+    // 1. Generate Terrain
+    simulationState.terrain = World.generate();
+    
+    // 2. Spawn 15 initial creatures at random locations
+    for(let i = 0; i < 15; i++) {
+        const randomX = Math.random() * canvas.width;
+        const randomY = Math.random() * canvas.height;
+        simulationState.creatures.push(new Creature(randomX, randomY));
+    }
+    
+    // 3. Update UI and draw the first frame
+    document.getElementById('ui-pop').innerText = simulationState.creatures.length;
+    render();
+}
+
 // Engine Loop
 let lastTime = 0;
 function simulationLoop(timestamp) {
@@ -19,7 +36,7 @@ function simulationLoop(timestamp) {
     
     const deltaTime = timestamp - lastTime;
     
-    if (deltaTime > 100) { // Limit tick rate to ~10 FPS for logic
+    if (deltaTime > 100) { // Limit logic updates to ~10 FPS
         updateWorld();
         updateCreatures();
         handleAI();
@@ -33,7 +50,7 @@ function simulationLoop(timestamp) {
         lastTime = timestamp;
     }
     
-    render(); // Render runs as fast as requestAnimationFrame allows
+    render(); // Render runs at screen refresh rate
     requestAnimationFrame(simulationLoop);
 }
 
@@ -45,17 +62,36 @@ function resolveCombat() { /* Math calculations */ }
 function spawnResources() { /* Sky drops, plant growth */ }
 function processEvolution() { /* Skill unlocks based on conditions */ }
 
+// --- UPDATED: Render Function ---
 function render() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    // Draw Terrain
-    // Draw Resources
-    // Draw Creatures
-    ctx.fillStyle = '#f8fafc';
-    ctx.fillText("World Engine Running...", canvas.width/2 - 50, canvas.height/2);
+
+    // 1. Draw Terrain
+    simulationState.terrain.forEach(tile => {
+        ctx.fillStyle = tile.color;
+        ctx.fillRect(tile.pixelX, tile.pixelY, World.tileSize, World.tileSize);
+    });
+
+    // 2. Draw Creatures
+    simulationState.creatures.forEach(creature => {
+        ctx.beginPath();
+        // Draw as circles
+        ctx.arc(creature.position.x, creature.position.y, 6, 0, Math.PI * 2);
+        ctx.fillStyle = '#ef4444'; // Bright red so they stand out
+        ctx.fill();
+        ctx.strokeStyle = '#ffffff'; // White border
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+    });
 }
 
 // Controls
 document.getElementById('btn-play').addEventListener('click', () => {
     running = !running;
-    if (running) requestAnimationFrame(simulationLoop);
+    if (running) {
+        requestAnimationFrame(simulationLoop);
+    }
 });
+
+// --- NEW: Start the setup ---
+initSimulation();
