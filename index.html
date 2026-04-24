@@ -3,15 +3,801 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>D&D NPC Viewer</title>
-    <link rel="stylesheet" href="css/styles.css">
+    <title>D&D NPC Generator</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* --- Dark Tech Aesthetic --- */
+        :root {
+            color-scheme: dark;
+            
+            --bg-base: #060807;
+            --bg-gradient-top: #0d1f19;
+            
+            --panel-bg: #111312;
+            --panel-border: rgba(255, 255, 255, 0.08);
+            --panel-hover: #161917;
+            
+            --input-bg: rgba(255, 255, 255, 0.03);
+            --input-border: rgba(255, 255, 255, 0.15);
+            --input-focus: rgba(0, 229, 181, 0.5);
+            
+            --text-primary: #ffffff;
+            --text-secondary: #9ba4a0;
+            --text-muted: #626a66;
+            
+            --accent-color: #00e5b5; /* Vibrant mint */
+            --accent-hover: #00c49a;
+            
+            --font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            --radius-lg: 12px;
+            --radius-md: 8px;
+            --radius-sm: 4px;
+            
+            --transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; cursor: none !important; }
+        html, body { overflow-x: hidden; width: 100%; }
+
+        body {
+            font-family: var(--font-family);
+            color: var(--text-primary);
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+            min-height: 100vh;
+            background-color: var(--bg-base);
+            background-image: radial-gradient(ellipse at 50% 0%, var(--bg-gradient-top) 0%, transparent 70%);
+            background-attachment: fixed;
+            position: relative;
+        }
+
+        /* Subtle Noise Texture */
+        body::after {
+            content: ''; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.04'/%3E%3C/svg%3E");
+            z-index: -1; pointer-events: none;
+        }
+
+        /* --- Custom Magic Cursor --- */
+        .cursor-glow, .cursor-dot {
+            position: fixed; pointer-events: none;
+            transform: translate(-50%, -50%); z-index: 9999; border-radius: 50%;
+            transition: opacity 0.2s;
+        }
+        .cursor-dot {
+            width: 4px; height: 4px; background: var(--accent-color);
+            box-shadow: 0 0 8px var(--accent-color), 0 0 15px #fff;
+            transition: width 0.2s, height 0.2s, opacity 0.2s;
+        }
+        .cursor-glow {
+            width: 40px; height: 40px;
+            background: radial-gradient(circle, rgba(0, 229, 181, 0.25) 0%, transparent 70%);
+            transition: width 0.2s, height 0.2s, background 0.2s, opacity 0.2s;
+        }
+
+        input[type="text"], input[type="number"], select { cursor: text !important; }
+        select, .tab-btn, .checkbox-label { cursor: pointer !important; color-scheme: dark; }
+        option { background-color: var(--panel-bg); color: var(--text-primary); }
+
+        /* Buttons */
+        .btn-primary {
+            background-color: var(--accent-color); color: #000; border: none;
+            padding: 0.75rem 1.25rem; border-radius: var(--radius-md); font-size: 0.9rem;
+            font-weight: 600; transition: var(--transition); text-align: center; width: 100%;
+        }
+        .btn-primary:hover { background-color: var(--text-primary); box-shadow: 0 0 15px rgba(0, 229, 181, 0.3); transform: translateY(-1px); }
+
+        .btn-secondary {
+            background-color: transparent; color: var(--text-primary); border: 1px solid var(--panel-border);
+            padding: 0.6rem 1rem; border-radius: var(--radius-md); font-size: 0.85rem;
+            font-weight: 500; transition: var(--transition); text-align: center; width: 100%;
+        }
+        .btn-secondary:hover { border-color: var(--text-secondary); background: rgba(255,255,255,0.02); }
+
+        /* --- Main Layout --- */
+        .container {
+            display: flex; flex-direction: column; max-width: 1400px;
+            margin: 0 auto; padding: 1.5rem; gap: 1.5rem; position: relative;
+        }
+        @media (min-width: 1000px) { .container { flex-direction: row; padding: 2rem 3rem 4rem 3rem; gap: 2rem; } }
+
+        /* Clean Flat Panels */
+        .panel {
+            background: var(--panel-bg); border: 1px solid var(--panel-border);
+            border-radius: var(--radius-lg); transition: var(--transition);
+        }
+
+        /* --- Sidebar Formatting --- */
+        .sidebar { flex: 0 0 380px; display: flex; flex-direction: column; padding: 2rem; }
+        @media (min-width: 1000px) {
+            .sidebar { height: calc(100vh - 4rem); position: sticky; top: 2rem; overflow-y: auto; }
+        }
+
+        .sidebar::-webkit-scrollbar { width: 4px; }
+        .sidebar::-webkit-scrollbar-track { background: transparent; margin: 16px 0; }
+        .sidebar::-webkit-scrollbar-thumb { background: var(--input-border); border-radius: 4px; }
+        .sidebar::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+        .sidebar-title { font-size: 1.5rem; font-weight: 600; margin-bottom: 1.5rem; color: var(--text-primary); text-align: center; }
+        .sidebar-title span { color: var(--accent-color); }
+        
+        /* Tabs UI */
+        .tabs-container { display: flex; background: rgba(0,0,0,0.3); border-radius: var(--radius-md); padding: 4px; margin-bottom: 1.5rem; border: 1px solid var(--panel-border); }
+        .tab-btn { flex: 1; padding: 0.6rem; background: transparent; border: none; border-radius: var(--radius-sm); color: var(--text-secondary); font-size: 0.85rem; font-weight: 600; transition: var(--transition); }
+        .tab-btn:hover { color: var(--text-primary); }
+        .tab-btn.active { background: var(--input-border); color: var(--text-primary); box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+        
+        .tab-content { display: none; animation: fadeIn 0.3s ease; }
+        .tab-content.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
+        .form-group { display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1.25rem; position: relative; }
+        label { font-size: 0.8rem; font-weight: 500; color: var(--text-secondary); display: flex; align-items: center; }
+
+        /* Fixed Tooltips */
+        .tooltip-container { position: relative; display: inline-flex; align-items: center; margin-left: 8px; cursor: help !important; }
+        .tooltip-icon { 
+            color: var(--text-secondary); border: 1px solid var(--text-muted); border-radius: 50%; 
+            width: 14px; height: 14px; display: flex; align-items: center; justify-content: center; 
+            font-size: 9px; font-weight: bold; transition: var(--transition);
+        }
+        .tooltip-container:hover .tooltip-icon { color: var(--accent-color); border-color: var(--accent-color); }
+        
+        .tooltip-text { 
+            visibility: hidden; opacity: 0; pointer-events: none;
+            position: absolute; top: calc(100% + 8px); left: 50%; 
+            width: 220px; white-space: normal; line-height: 1.4; text-align: left;
+            background: #1a1d1c; border: 1px solid var(--panel-border); color: var(--text-primary); 
+            padding: 10px 12px; border-radius: 6px; font-size: 0.75rem; 
+            box-shadow: 0 10px 25px rgba(0,0,0,0.8); z-index: 100; transition: opacity 0.2s, transform 0.2s;
+            transform: translate(-50%, -5px);
+        }
+        .tooltip-container:hover .tooltip-text { visibility: visible; opacity: 1; transform: translate(-50%, 0); }
+
+        /* Inputs */
+        input[type="text"], input[type="number"], select {
+            width: 100%; padding: 0.75rem 1rem; border: 1px solid var(--input-border);
+            border-radius: var(--radius-md); font-size: 0.85rem; font-family: inherit;
+            background: var(--input-bg); color: var(--text-primary); transition: var(--transition); appearance: none;
+        }
+
+        select {
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23626a66' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+            background-repeat: no-repeat; background-position: right 1rem center; padding-right: 2.5rem;
+        }
+
+        input:hover, select:hover { border-color: var(--text-secondary); }
+        input:focus, select:focus { outline: none; border-color: var(--input-focus); box-shadow: 0 0 0 1px var(--input-focus); }
+
+        /* Checkbox Lists */
+        .checkbox-list { display: flex; flex-direction: column; gap: 0.5rem; padding-top: 0.5rem; }
+        .checkbox-label { display: flex; align-items: center; gap: 0.75rem; font-size: 0.85rem; color: var(--text-secondary); transition: var(--transition); }
+        .checkbox-label:hover { color: var(--text-primary); }
+        
+        .checkbox-label input {
+            appearance: none; width: 16px; height: 16px; border: 1px solid var(--input-border);
+            border-radius: 4px; background: rgba(0,0,0,0.2); position: relative; transition: var(--transition);
+        }
+        .checkbox-label input:checked { background: var(--accent-color); border-color: var(--accent-color); }
+        .checkbox-label input:checked::after {
+            content: ''; position: absolute; left: 4px; top: 1px; width: 4px; height: 8px;
+            border: solid #000; border-width: 0 2px 2px 0; transform: rotate(45deg);
+        }
+
+        .scroll-box { max-height: 160px; overflow-y: auto; padding-right: 10px; margin-bottom: 0.5rem;}
+        .scroll-box::-webkit-scrollbar { width: 4px; }
+        .scroll-box::-webkit-scrollbar-track { background: transparent; }
+        .scroll-box::-webkit-scrollbar-thumb { background: var(--panel-border); border-radius: 4px; }
+
+        /* Main Content Grid */
+        .main-content { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+        
+        /* --- D&D Stat Sheet Styling --- */
+        .stat-sheet {
+            background: var(--panel-bg); border: 1px solid var(--panel-border);
+            border-radius: var(--radius-lg); padding: 2.5rem; transition: var(--transition);
+            width: 100%; max-width: 100%; box-sizing: border-box; box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+            overflow-wrap: break-word; word-wrap: break-word;
+        }
+        
+        .sheet-header { border-bottom: 2px solid var(--accent-color); padding-bottom: 1rem; margin-bottom: 1.5rem; }
+        .sheet-header h1 { font-size: 2.5rem; font-weight: 600; color: var(--accent-color); margin-bottom: 0.25rem; letter-spacing: -0.02em; word-break: break-word; }
+        .sheet-meta { font-size: 1rem; color: var(--text-secondary); font-style: italic; }
+
+        .sheet-property { margin-bottom: 0.5rem; font-size: 0.95rem; }
+        .sheet-property strong { color: var(--text-primary); font-weight: 600; margin-right: 0.25rem; }
+
+        /* Attribute Block */
+        .attr-grid { 
+            display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; 
+            background: rgba(255,255,255,0.02); border: 1px solid var(--panel-border); 
+            border-radius: var(--radius-md); padding: 1.5rem 1rem; margin: 1.5rem 0;
+            text-align: center;
+        }
+        @media (min-width: 600px) {
+            .attr-grid { grid-template-columns: repeat(6, 1fr); gap: 0.5rem; }
+        }
+        .attr-box { display: flex; flex-direction: column; gap: 0.25rem; }
+        .attr-name { font-size: 0.8rem; color: var(--text-muted); font-weight: 600; }
+        .attr-score { font-size: 1.4rem; font-weight: 700; color: var(--text-primary); }
+        .attr-mod { font-size: 0.9rem; color: var(--accent-color); }
+
+        /* Sections */
+        .sheet-divider { height: 1px; background: var(--panel-border); margin: 1.5rem 0; }
+        .section-title { font-size: 1.5rem; color: var(--text-primary); border-bottom: 1px solid var(--panel-border); padding-bottom: 0.5rem; margin: 2rem 0 1rem 0; font-weight: 500; }
+        
+        .action-block { margin-bottom: 1.25rem; }
+        .action-block strong { color: var(--accent-color); font-weight: 600; font-style: italic; }
+        .action-block p { display: inline; color: var(--text-secondary); font-size: 0.95rem; line-height: 1.5; }
+
+        .magic-section { display: none; }
+    </style>
 </head>
 <body>
-    <div class="app-wrapper">
-        <main id="npc-container" class="card">
-            <div class="loading">Loading NPC data...</div>
-        </main>
-    </div>
-    <script src="js/app.js"></script>
+
+<div class="cursor-glow" id="cursorGlow"></div>
+<div class="cursor-dot" id="cursorDot"></div>
+
+<div class="container">
+    <!-- Sidebar Controls -->
+    <aside class="sidebar panel">
+        <div class="sidebar-title">eNPC <span>Generator</span></div>
+        
+        <!-- Tabs -->
+        <div class="tabs-container">
+            <button class="tab-btn active" id="btn-tab-steered" onclick="switchTab('steered')">Steered Setup</button>
+            <button class="tab-btn" id="btn-tab-random" onclick="switchTab('random')">Completely Random</button>
+        </div>
+
+        <!-- TAB 1: Steered Selection -->
+        <div id="tab-steered" class="tab-content active">
+            <div class="form-group">
+                <label for="npc-name">Character Name</label>
+                <input type="text" id="npc-name" placeholder="e.g. Vex the Shadow" value="Unknown Operative" oninput="generateNPC()">
+            </div>
+
+            <div class="form-group">
+                <label for="npc-race">Race</label>
+                <select id="npc-race" onchange="generateNPC()">
+                    <option value="Human">Human</option>
+                    <option value="Elf">Elf</option>
+                    <option value="Dwarf">Dwarf</option>
+                    <option value="Halfling">Halfling</option>
+                    <option value="Dragonborn">Dragonborn</option>
+                    <option value="Orc">Orc</option>
+                    <option value="Tiefling">Tiefling</option>
+                    <option value="Gnome">Gnome</option>
+                    <option value="Goliath">Goliath</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="npc-class">Class</label>
+                <select id="npc-class" onchange="autoAssign()">
+                    <option value="Fighter">Fighter</option>
+                    <option value="Rogue">Rogue</option>
+                    <option value="Wizard">Wizard</option>
+                    <option value="Cleric">Cleric</option>
+                    <option value="Barbarian">Barbarian</option>
+                    <option value="Ranger">Ranger</option>
+                    <option value="Paladin">Paladin</option>
+                    <option value="Bard">Bard</option>
+                    <option value="Warlock">Warlock</option>
+                    <option value="Monk">Monk</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="npc-level">Level (1-20)</label>
+                <input type="number" id="npc-level" min="1" max="20" value="5" oninput="autoAssign()">
+            </div>
+
+            <div class="form-group">
+                <label for="npc-archetype">Archetype
+                    <div class="tooltip-container">
+                        <div class="tooltip-icon">?</div>
+                        <div class="tooltip-text">Dictates the primary stat focus and grants specialized combat features based on playstyle.</div>
+                    </div>
+                </label>
+                <select id="npc-archetype" onchange="generateNPC()">
+                    <option value="two-handed">Heavy Brawler</option>
+                    <option value="sniper">Ranged Specialist</option>
+                    <option value="caster">Arcane Scholar</option>
+                    <option value="tank">Defender</option>
+                    <option value="assassin">Skirmisher</option>
+                    <option value="swashbuckler">Duelist</option>
+                    <option value="necromancer">Dark Arts</option>
+                    <option value="battlemaster">Tactician</option>
+                    <option value="divine">Healer</option>
+                    <option value="beastmaster">Tracker</option>
+                    <option value="elementalist">Evoker</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="npc-weapon">Primary Weapon</label>
+                <select id="npc-weapon" onchange="generateNPC()">
+                    <optgroup label="Standard Issue">
+                        <option value="Longsword">Longsword (1d8 Slashing)</option>
+                        <option value="Greatsword">Greatsword (2d6 Slashing)</option>
+                        <option value="Dagger">Dagger (1d4 Piercing)</option>
+                        <option value="Longbow">Longbow (1d8 Piercing)</option>
+                        <option value="Heavy Crossbow">Heavy Crossbow (1d10 Piercing)</option>
+                        <option value="Staff">Quarterstaff (1d6 Bludgeoning)</option>
+                        <option value="Rapier">Rapier (1d8 Piercing)</option>
+                        <option value="Halberd">Halberd (1d10 Slashing)</option>
+                    </optgroup>
+                    <optgroup label="Enhanced Output (Magic)">
+                        <option value="Flame Tongue">Flame Tongue (+2d6 Fire)</option>
+                        <option value="Frost Brand">Frost Brand (+1d6 Cold)</option>
+                        <option value="Dagger of Venom">Dagger of Venom (+1, Poison)</option>
+                        <option value="Oathbow">Oathbow (+3d6 Piercing on target)</option>
+                        <option value="Staff of Power">Staff of Power (+2 to hit/dmg/AC)</option>
+                        <option value="Sun Blade">Sun Blade (+2, 1d8 Radiant)</option>
+                        <option value="Mace of Smite">Mace of Disruption (+2d6 Radiant vs Undead)</option>
+                    </optgroup>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="npc-armor">Armor</label>
+                <select id="npc-armor" onchange="generateNPC()">
+                    <option value="Unarmored">Unarmored (10 + Dex)</option>
+                    <option value="Leather">Leather Armor (11 + Dex)</option>
+                    <option value="Studded Leather">Studded Leather (+12 + Dex)</option>
+                    <option value="Breastplate">Breastplate (14 + Dex, max 2)</option>
+                    <option value="Chainmail">Chain Mail (16)</option>
+                    <option value="Plate">Plate Armor (18)</option>
+                    <option value="Mithral Plate">Mithral Plate (18, No stealth disadv.)</option>
+                    <option value="Robes of the Archmagi">Archmagi Robes (15 + Dex, +2 Spell DC)</option>
+                </select>
+            </div>
+
+            <div class="form-group" style="flex-direction: row; align-items: center; justify-content: space-between; border-top: 1px solid var(--panel-border); padding-top: 1.5rem;">
+                <label>Auto-Scale Skills & Spells</label>
+                <input type="checkbox" id="npc-auto-assign" checked onchange="autoAssign()" style="width: auto;">
+            </div>
+
+            <div class="form-group" style="flex-direction: row; align-items: center; justify-content: space-between;">
+                <label>Enable Spellcasting</label>
+                <input type="checkbox" id="npc-magic" onchange="toggleMagicSection(); generateNPC();" style="width: auto;">
+            </div>
+
+            <div class="form-group magic-section" id="magic-controls">
+                <label>Available Spells</label>
+                <div class="checkbox-list scroll-box" id="spell-list" onchange="generateNPC()"></div>
+            </div>
+
+            <div class="form-group">
+                <label>Proficiencies</label>
+                <div class="checkbox-list scroll-box" id="skill-list" onchange="generateNPC()"></div>
+            </div>
+
+            <div class="form-group">
+                <label>Saving Throws</label>
+                <div class="checkbox-list scroll-box" id="save-list" onchange="generateNPC()"></div>
+            </div>
+
+            <div class="form-group" style="flex-direction: row; align-items: center; justify-content: space-between; margin-top: 1rem; border-top: 1px solid var(--panel-border); padding-top: 1.5rem;">
+                <label style="color: #ff453a;">Boss Monster
+                    <div class="tooltip-container">
+                        <div class="tooltip-icon" style="color: #ff453a; border-color: #ff453a;">?</div>
+                        <div class="tooltip-text">Boosts HP exponentially, adds immunities, and grants Legendary Actions.</div>
+                    </div>
+                </label>
+                <input type="checkbox" id="npc-boss" onchange="generateNPC()" style="width: auto;">
+            </div>
+            
+            <button class="btn-secondary" style="margin-top: 1.5rem;" onclick="exportJSON()">Export JSON Format</button>
+        </div>
+
+        <!-- TAB 2: Completely Random -->
+        <div id="tab-random" class="tab-content">
+            <div class="form-group">
+                <label for="quick-class">Target Class</label>
+                <select id="quick-class">
+                    <option value="Any">Any Class</option>
+                    <option value="Fighter">Fighter</option>
+                    <option value="Rogue">Rogue</option>
+                    <option value="Wizard">Wizard</option>
+                    <option value="Cleric">Cleric</option>
+                    <option value="Barbarian">Barbarian</option>
+                    <option value="Ranger">Ranger</option>
+                    <option value="Paladin">Paladin</option>
+                    <option value="Bard">Bard</option>
+                    <option value="Warlock">Warlock</option>
+                    <option value="Monk">Monk</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="quick-tier">Power Tier</label>
+                <select id="quick-tier">
+                    <option value="low">Low (Levels 1-4)</option>
+                    <option value="mid" selected>Mid (Levels 5-10)</option>
+                    <option value="high">High (Levels 11-16)</option>
+                    <option value="epic">Epic (Levels 17-20)</option>
+                </select>
+            </div>
+
+            <div class="form-group" style="flex-direction: row; align-items: center; justify-content: space-between; margin-top: 1rem; border-top: 1px solid var(--panel-border); padding-top: 1rem;">
+                <label style="color: #ff453a;">Force Boss Template</label>
+                <input type="checkbox" id="quick-boss" style="width: auto;">
+            </div>
+
+            <button class="btn-primary" style="margin-top: 1.5rem;" onclick="triggerRandom()">Generate Random Entity</button>
+            <p style="color: var(--text-muted); font-size: 0.75rem; text-align: center; margin-top: 1rem;">This will populate the Steered Setup tab with completely randomized stats.</p>
+        </div>
+    </aside>
+
+    <!-- Main Output Area -->
+    <main class="main-content">
+        <div id="stat-block-render">
+            <!-- Stat Block renders here -->
+        </div>
+    </main>
+</div>
+
+<script>
+    // --- Tabs Logic ---
+    function switchTab(tabId) {
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.getElementById('tab-' + tabId).classList.add('active');
+        document.getElementById('btn-tab-' + tabId).classList.add('active');
+    }
+
+    // --- Magic Cursor Logic ---
+    const cursorDot = document.getElementById('cursorDot');
+    const cursorGlow = document.getElementById('cursorGlow');
+    let mouseX = window.innerWidth / 2; let mouseY = window.innerHeight / 2;
+    let glowX = mouseX; let glowY = mouseY;
+
+    window.addEventListener('mousemove', (e) => {
+        mouseX = e.clientX; mouseY = e.clientY;
+        cursorDot.style.left = `${mouseX}px`; cursorDot.style.top = `${mouseY}px`;
+    });
+
+    function animateCursor() {
+        glowX += (mouseX - glowX) * 0.2; glowY += (mouseY - glowY) * 0.2;
+        cursorGlow.style.left = `${glowX}px`; cursorGlow.style.top = `${glowY}px`;
+        requestAnimationFrame(animateCursor);
+    }
+    animateCursor();
+
+    document.addEventListener('mouseover', (e) => {
+        if (e.target.tagName === 'INPUT' && (e.target.type === 'text' || e.target.type === 'number') || e.target.tagName === 'SELECT') {
+            cursorGlow.style.opacity = '0'; cursorDot.style.opacity = '0'; return;
+        } else {
+            cursorGlow.style.opacity = '1'; cursorDot.style.opacity = '1';
+        }
+
+        const interactables = ['BUTTON', 'LABEL'];
+        if (interactables.includes(e.target.tagName) || e.target.closest('.checkbox-label') || e.target.closest('.tooltip-container') || e.target.closest('.tab-btn')) {
+            cursorGlow.style.width = '60px'; cursorGlow.style.height = '60px';
+            cursorGlow.style.background = 'radial-gradient(circle, rgba(0, 229, 181, 0.4) 0%, transparent 70%)';
+        }
+    });
+    
+    document.addEventListener('mouseout', (e) => {
+        cursorGlow.style.width = '40px'; cursorGlow.style.height = '40px';
+        cursorGlow.style.background = 'radial-gradient(circle, rgba(0, 229, 181, 0.25) 0%, transparent 70%)';
+    });
+
+    // --- Data Dictionaries & Logic ---
+    const CLASS_DATA = {
+        Fighter: { hd: 10, spellStat: 'int', defSkills: ['Athletics', 'Intimidation'], defSaves: ['STR', 'CON'], casterType: 'none' },
+        Rogue: { hd: 8, spellStat: 'int', defSkills: ['Acrobatics', 'Stealth', 'Sleight of Hand'], defSaves: ['DEX', 'INT'], casterType: 'none' },
+        Wizard: { hd: 6, spellStat: 'int', defSkills: ['Arcana', 'History'], defSaves: ['INT', 'WIS'], casterType: 'full' },
+        Cleric: { hd: 8, spellStat: 'wis', defSkills: ['Medicine', 'Religion'], defSaves: ['WIS', 'CHA'], casterType: 'full' },
+        Barbarian: { hd: 12, spellStat: 'cha', defSkills: ['Athletics', 'Survival'], defSaves: ['STR', 'CON'], casterType: 'none' },
+        Ranger: { hd: 10, spellStat: 'wis', defSkills: ['Nature', 'Stealth', 'Survival'], defSaves: ['STR', 'DEX'], casterType: 'half' },
+        Paladin: { hd: 10, spellStat: 'cha', defSkills: ['Athletics', 'Persuasion'], defSaves: ['WIS', 'CHA'], casterType: 'half' },
+        Bard: { hd: 8, spellStat: 'cha', defSkills: ['Performance', 'Persuasion', 'Deception'], defSaves: ['DEX', 'CHA'], casterType: 'full' },
+        Warlock: { hd: 8, spellStat: 'cha', defSkills: ['Arcana', 'Intimidation'], defSaves: ['WIS', 'CHA'], casterType: 'warlock' },
+        Monk: { hd: 8, spellStat: 'wis', defSkills: ['Acrobatics', 'Insight'], defSaves: ['STR', 'DEX'], casterType: 'none' }
+    };
+
+    const ARMOR_DATA = {
+        "Unarmored": { base: 10, maxDex: 99 }, "Leather": { base: 11, maxDex: 99 }, "Studded Leather": { base: 12, maxDex: 99 },
+        "Breastplate": { base: 14, maxDex: 2 }, "Chainmail": { base: 16, maxDex: 0 }, "Plate": { base: 18, maxDex: 0 },
+        "Mithral Plate": { base: 18, maxDex: 0 }, "Robes of the Archmagi": { base: 15, maxDex: 99, magic: true }
+    };
+
+    const WEAPON_DATA = {
+        "Longsword": { dmg: '1d8', type: 'slashing', stat: 'str', finesse: false },
+        "Greatsword": { dmg: '2d6', type: 'slashing', stat: 'str', finesse: false },
+        "Dagger": { dmg: '1d4', type: 'piercing', stat: 'dex', finesse: true },
+        "Longbow": { dmg: '1d8', type: 'piercing', stat: 'dex', finesse: false, ranged: true },
+        "Heavy Crossbow": { dmg: '1d10', type: 'piercing', stat: 'dex', finesse: false, ranged: true },
+        "Staff": { dmg: '1d6', type: 'bludgeoning', stat: 'str', finesse: false },
+        "Rapier": { dmg: '1d8', type: 'piercing', stat: 'dex', finesse: true },
+        "Halberd": { dmg: '1d10', type: 'slashing', stat: 'str', finesse: false, reach: true },
+        "Flame Tongue": { dmg: '1d8', type: 'slashing', stat: 'str', finesse: false, extraDmg: ' plus 2d6 fire' },
+        "Frost Brand": { dmg: '2d6', type: 'slashing', stat: 'str', finesse: false, bonus: 0, extraDmg: ' plus 1d6 cold' },
+        "Dagger of Venom": { dmg: '1d4', type: 'piercing', stat: 'dex', finesse: true, bonus: 1, extraDmg: ' (Save or 2d10 poison)' },
+        "Oathbow": { dmg: '1d8', type: 'piercing', stat: 'dex', finesse: false, ranged: true, extraDmg: ' plus 3d6 piercing (sworn enemy)' },
+        "Staff of Power": { dmg: '1d6', type: 'bludgeoning', stat: 'str', finesse: false, bonus: 2 },
+        "Sun Blade": { dmg: '1d8', type: 'radiant', stat: 'str', finesse: true, bonus: 2, extraDmg: ' (+1d8 vs undead)' },
+        "Mace of Smite": { dmg: '1d6', type: 'bludgeoning', stat: 'str', finesse: false, bonus: 1, extraDmg: ' plus 2d6 radiant vs undead' }
+    };
+
+    const SPELL_DB = {
+        "Fireball": { desc: "150 ft. 20-ft radius sphere. Dex save for half. 8d6 fire damage.", classes: ['Wizard', 'Warlock'], level: 3 },
+        "Shield": { desc: "Self. Reaction when hit. +5 AC until start of your next turn.", classes: ['Wizard', 'Warlock'], level: 1 },
+        "Magic Missile": { desc: "120 ft. 3 glowing darts. Auto-hit, 1d4+1 force damage each.", classes: ['Wizard'], level: 1 },
+        "Cure Wounds": { desc: "Touch. Restore 1d8 + Spellcasting Mod HP.", classes: ['Cleric', 'Paladin', 'Ranger', 'Bard'], level: 1 },
+        "Invisibility": { desc: "Touch. Target becomes invisible until attacking or casting (Concentration).", classes: ['Wizard', 'Bard', 'Warlock'], level: 2 },
+        "Hold Person": { desc: "60 ft. Humanoid target. Wis save or be paralyzed up to 1 minute (Concentration).", classes: ['Cleric', 'Wizard', 'Bard', 'Warlock'], level: 2 },
+        "Misty Step": { desc: "Self. Bonus action teleport up to 30 ft to an unoccupied space.", classes: ['Wizard', 'Warlock', 'Paladin'], level: 2 },
+        "Haste": { desc: "30 ft. Target speed doubled, +2 AC, adv on Dex saves, gains extra action (Concentration).", classes: ['Wizard'], level: 3 },
+        "Hunter's Mark": { desc: "90 ft. Bonus action. Deal extra 1d6 damage to target on weapon hits (Concentration).", classes: ['Ranger'], level: 1 },
+        "Spiritual Weapon": { desc: "60 ft. Bonus action melee spell attack. 1d8 + Mod force damage.", classes: ['Cleric'], level: 2 },
+        "Divine Smite (Spell)": { desc: "Self. Expend spell slot on melee hit. +2d8 radiant damage.", classes: ['Paladin'], level: 1 },
+        "Vicious Mockery": { desc: "60 ft. Wis save or take 1d4 psychic damage and have disadvantage on next attack.", classes: ['Bard'], level: 0 },
+        "Eldritch Blast": { desc: "120 ft. Ranged spell attack. 1d10 force damage.", classes: ['Warlock'], level: 0 },
+        "Blight": { desc: "30 ft. Con save for half. 8d8 necrotic damage.", classes: ['Wizard', 'Warlock', 'Cleric'], level: 4 },
+        "Cone of Cold": { desc: "Self (60-ft cone). Con save for half. 8d8 cold damage.", classes: ['Wizard'], level: 5 }
+    };
+
+    const SKILLS_DB = ['Acrobatics', 'Animal Handling', 'Arcana', 'Athletics', 'Deception', 'History', 'Insight', 'Intimidation', 'Investigation', 'Medicine', 'Nature', 'Perception', 'Performance', 'Persuasion', 'Religion', 'Sleight of Hand', 'Stealth', 'Survival'];
+    
+    let currentCharacter = null;
+
+    function initUI() {
+        const spellList = document.getElementById('spell-list');
+        Object.keys(SPELL_DB).forEach(spell => { spellList.innerHTML += `<label class="checkbox-label"><input type="checkbox" value="${spell}"> ${spell}</label>`; });
+        const skillList = document.getElementById('skill-list');
+        SKILLS_DB.forEach(skill => { skillList.innerHTML += `<label class="checkbox-label"><input type="checkbox" value="${skill}"> ${skill}</label>`; });
+        const saveList = document.getElementById('save-list');
+        ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'].forEach(save => { saveList.innerHTML += `<label class="checkbox-label"><input type="checkbox" value="${save}"> ${save}</label>`; });
+        
+        triggerRandom(); // Build initial dummy character
+    }
+
+    function toggleMagicSection() {
+        document.getElementById('magic-controls').style.display = document.getElementById('npc-magic').checked ? 'block' : 'none';
+    }
+
+    // Connects Randomizer tab to Steered tab inputs
+    function triggerRandom() {
+        const classChoice = document.getElementById('quick-class').value;
+        const tierChoice = document.getElementById('quick-tier').value;
+        const forceBoss = document.getElementById('quick-boss').checked;
+
+        const classes = ['Fighter', 'Rogue', 'Wizard', 'Cleric', 'Barbarian', 'Ranger', 'Paladin', 'Bard', 'Warlock', 'Monk'];
+        const races = ['Human', 'Elf', 'Dwarf', 'Halfling', 'Dragonborn', 'Orc', 'Tiefling', 'Gnome', 'Goliath'];
+        
+        const selectedClass = classChoice === 'Any' ? classes[Math.floor(Math.random() * classes.length)] : classChoice;
+        document.getElementById('npc-class').value = selectedClass;
+        document.getElementById('npc-race').value = races[Math.floor(Math.random() * races.length)];
+        
+        let minLv = 1, maxLv = 4;
+        if (tierChoice === 'mid') { minLv = 5; maxLv = 10; }
+        else if (tierChoice === 'high') { minLv = 11; maxLv = 16; }
+        else if (tierChoice === 'epic') { minLv = 17; maxLv = 20; }
+        
+        document.getElementById('npc-level').value = Math.floor(Math.random() * (maxLv - minLv + 1)) + minLv;
+        
+        let arch = ['two-handed', 'tank', 'battlemaster'];
+        if (['Wizard', 'Cleric', 'Bard', 'Warlock'].includes(selectedClass)) arch = ['caster', 'divine', 'necromancer', 'elementalist'];
+        if (['Rogue', 'Ranger', 'Monk'].includes(selectedClass)) arch = ['assassin', 'sniper', 'swashbuckler', 'beastmaster'];
+        document.getElementById('npc-archetype').value = arch[Math.floor(Math.random() * arch.length)];
+        
+        if (['Wizard', 'Warlock'].includes(selectedClass)) { document.getElementById('npc-weapon').value = 'Staff'; document.getElementById('npc-armor').value = 'Robes of the Archmagi'; }
+        else if (['Rogue', 'Ranger', 'Bard', 'Monk'].includes(selectedClass)) { document.getElementById('npc-weapon').value = ['Dagger', 'Rapier', 'Longbow'][Math.floor(Math.random()*3)]; document.getElementById('npc-armor').value = 'Studded Leather'; }
+        else { document.getElementById('npc-weapon').value = ['Longsword', 'Greatsword', 'Halberd'][Math.floor(Math.random()*3)]; document.getElementById('npc-armor').value = ['Chainmail', 'Plate', 'Breastplate'][Math.floor(Math.random()*3)]; }
+
+        const names = ['Kaelen', 'Vex', 'Thorm', 'Aria', 'Grom', 'Elowen', 'Sylas', 'Lyra', 'Cael', 'Morok'];
+        const titles = ['the Swift', 'Ironblood', 'Nightwalker', 'Stormcaller', 'the Unbroken', 'Shadowstep', 'the Bright'];
+        document.getElementById('npc-name').value = `${names[Math.floor(Math.random() * names.length)]} ${titles[Math.floor(Math.random() * titles.length)]}`;
+        
+        document.getElementById('npc-boss').checked = forceBoss ? true : (Math.random() > 0.85);
+        
+        autoAssign(); // Pushes data through, updates checkboxes and creates sheet
+        switchTab('steered'); // Slide over so they can see what was built
+    }
+
+    function autoAssign() {
+        if (!document.getElementById('npc-auto-assign').checked) { generateNPC(); return; }
+
+        const cls = document.getElementById('npc-class').value;
+        const level = parseInt(document.getElementById('npc-level').value) || 1;
+        const classInfo = CLASS_DATA[cls];
+
+        document.getElementById('skill-list').querySelectorAll('input').forEach(cb => cb.checked = false);
+        classInfo.defSkills.forEach(skill => { const cb = document.querySelector(`#skill-list input[value="${skill}"]`); if(cb) cb.checked = true; });
+        const perc = document.querySelector(`#skill-list input[value="Perception"]`); if(perc && level >= 3) perc.checked = true;
+
+        document.getElementById('save-list').querySelectorAll('input').forEach(cb => cb.checked = false);
+        classInfo.defSaves.forEach(save => { const cb = document.querySelector(`#save-list input[value="${save}"]`); if(cb) cb.checked = true; });
+
+        document.getElementById('spell-list').querySelectorAll('input').forEach(cb => cb.checked = false);
+        if (classInfo.casterType !== 'none') {
+            document.getElementById('npc-magic').checked = true; toggleMagicSection();
+            let maxSpellLevel = 0;
+            if (classInfo.casterType === 'full') maxSpellLevel = Math.ceil(level / 2);
+            else if (classInfo.casterType === 'half') maxSpellLevel = level >= 2 ? Math.ceil(level / 4) : 0;
+            else if (classInfo.casterType === 'warlock') maxSpellLevel = Math.min(5, Math.ceil(level / 2));
+            
+            Object.keys(SPELL_DB).forEach(spellName => {
+                const s = SPELL_DB[spellName]; if(s.classes.includes(cls) && s.level <= maxSpellLevel) {
+                    const el = document.querySelector(`#spell-list input[value="${spellName}"]`);
+                    if(el) el.checked = true;
+                }
+            });
+        } else {
+            document.getElementById('npc-magic').checked = false; toggleMagicSection();
+        }
+        generateNPC();
+    }
+
+    function calcMod(s) { return Math.floor((s - 10) / 2); }
+    function formatMod(m) { return m >= 0 ? `+${m}` : `${m}`; }
+
+    function generateStats(archetype, level) {
+        let array = [16, 14, 14, 12, 10, 8];
+        let asis = Math.floor(level / 4) * 2;
+        array[0] = Math.min(20, array[0] + Math.ceil(asis / 2)); array[1] = Math.min(20, array[1] + Math.floor(asis / 2));
+        
+        let stats = { str:10, dex:10, con:10, int:10, wis:10, cha:10 };
+        switch(archetype) {
+            case 'two-handed': stats = {str: array[0], con: array[1], dex: array[2], wis: array[3], cha: array[4], int: array[5]}; break;
+            case 'sniper': stats = {dex: array[0], wis: array[1], con: array[2], int: array[3], str: array[4], cha: array[5]}; break;
+            case 'caster': stats = {int: array[0], con: array[1], dex: array[2], wis: array[3], cha: array[4], str: array[5]}; break;
+            case 'tank': stats = {con: array[0], str: array[1], wis: array[2], dex: array[3], cha: array[4], int: array[5]}; break;
+            case 'assassin': stats = {dex: array[0], int: array[1], con: array[2], wis: array[3], cha: array[4], str: array[5]}; break;
+            case 'swashbuckler': stats = {dex: array[0], cha: array[1], con: array[2], str: array[3], wis: array[4], int: array[5]}; break;
+            case 'necromancer': stats = {int: array[0], con: array[1], wis: array[2], dex: array[3], cha: array[4], str: array[5]}; break;
+            case 'battlemaster': stats = {str: array[0], int: array[1], con: array[2], dex: array[3], wis: array[4], cha: array[5]}; break;
+            case 'divine': stats = {wis: array[0], cha: array[1], con: array[2], str: array[3], dex: array[4], int: array[5]}; break;
+            case 'beastmaster': stats = {wis: array[0], dex: array[1], con: array[2], str: array[3], int: array[4], cha: array[5]}; break;
+            case 'elementalist': stats = {cha: array[0], con: array[1], dex: array[2], int: array[3], wis: array[4], str: array[5]}; break;
+        }
+        return stats;
+    }
+
+    function generateNPC() {
+        const name = document.getElementById('npc-name').value || 'Unknown';
+        const race = document.getElementById('npc-race').value;
+        const cls = document.getElementById('npc-class').value;
+        let level = parseInt(document.getElementById('npc-level').value) || 1;
+        const arch = document.getElementById('npc-archetype').value;
+        const wpKey = document.getElementById('npc-weapon').value;
+        const armKey = document.getElementById('npc-armor').value;
+        const isMagic = document.getElementById('npc-magic').checked;
+        const isBoss = document.getElementById('npc-boss').checked;
+
+        const stats = generateStats(arch, level);
+        const mods = { str: calcMod(stats.str), dex: calcMod(stats.dex), con: calcMod(stats.con), int: calcMod(stats.int), wis: calcMod(stats.wis), cha: calcMod(stats.cha) };
+        const pb = Math.floor((level - 1) / 4) + 2;
+        
+        const hd = CLASS_DATA[cls].hd;
+        let hp = hd + mods.con + ((level - 1) * (Math.floor(hd / 2) + 1 + mods.con));
+        if (isBoss) hp = Math.floor(hp * 2) + (level * 2);
+
+        const armor = ARMOR_DATA[armKey];
+        let ac = armor.base + Math.min(mods.dex, armor.maxDex);
+        if (armKey === 'Robes of the Archmagi') ac += 2;
+
+        const wp = WEAPON_DATA[wpKey];
+        let atkStat = (wp.finesse && mods.dex > mods.str) || wp.ranged ? 'dex' : wp.stat;
+        const magicBonus = wp.bonus || 0;
+        const atkBonus = mods[atkStat] + pb + magicBonus;
+        const dmgBonus = mods[atkStat] + magicBonus;
+
+        let features = [];
+        if (arch === 'two-handed') features.push({name: "Brute", desc: "A melee weapon deals one extra die of its damage when the NPC hits with it."});
+        if (arch === 'assassin' || cls === 'Rogue') features.push({name: "Sneak Attack", desc: `Once per turn, deals an extra ${Math.ceil(level/2)}d6 damage when hitting with advantage or an ally is nearby.`});
+        if (arch === 'sniper') features.push({name: "Sharpshooter", desc: "Attacking at long range doesn't impose disadvantage. Ignores half and three-quarters cover."});
+        if (arch === 'tank') features.push({name: "Indomitable", desc: "Advantage on saving throws against being frightened or paralyzed."});
+        if (arch === 'swashbuckler') features.push({name: "Fancy Footwork", desc: "During its turn, if the NPC makes a melee attack against a creature, that creature can't make opportunity attacks against it."});
+        if (arch === 'necromancer') features.push({name: "Grim Harvest", desc: "Once per turn when the NPC kills one or more creatures with a spell of 1st level or higher, it regains hit points equal to twice the spell's level."});
+        if (arch === 'battlemaster') features.push({name: "Combat Superiority", desc: `The NPC has ${Math.floor(level/3)+2} superiority dice (d8s). It can spend a die to add it to an attack roll or damage roll, or use it to trip/disarm a foe.`});
+
+        let spellData = null;
+        if (isMagic) {
+            const selected = Array.from(document.getElementById('spell-list').querySelectorAll('input:checked')).map(cb => cb.value);
+            if(selected.length > 0) {
+                let dc = 8 + pb + mods[CLASS_DATA[cls].spellStat];
+                if (armKey === 'Robes of the Archmagi') dc += 2;
+                spellData = {
+                    stat: CLASS_DATA[cls].spellStat.toUpperCase(),
+                    dc: dc,
+                    spells: selected.map(s => ({ name: s, desc: SPELL_DB[s].desc }))
+                };
+            }
+        }
+
+        const selectedSkills = Array.from(document.getElementById('skill-list').querySelectorAll('input:checked')).map(cb => cb.value);
+        const selectedSaves = Array.from(document.getElementById('save-list').querySelectorAll('input:checked')).map(cb => cb.value);
+        const skillStatMap = {
+            'Athletics': 'str', 'Acrobatics': 'dex', 'Sleight of Hand': 'dex', 'Stealth': 'dex',
+            'Arcana': 'int', 'History': 'int', 'Investigation': 'int', 'Nature': 'int', 'Religion': 'int',
+            'Animal Handling': 'wis', 'Insight': 'wis', 'Medicine': 'wis', 'Perception': 'wis', 'Survival': 'wis',
+            'Deception': 'cha', 'Intimidation': 'cha', 'Performance': 'cha', 'Persuasion': 'cha'
+        };
+        
+        currentCharacter = {
+            name, race, cls, level, hp, ac, armKey, pb, stats, mods, wpKey, wp, atkBonus, dmgBonus, isBoss, spellData, features, hd, magicBonus,
+            saves: selectedSaves.map(s => `${s} ${formatMod(mods[s.toLowerCase()] + pb)}`).join(', '),
+            skills: selectedSkills.map(s => `${s} ${formatMod(mods[skillStatMap[s]||'int'] + pb)}`).join(', '),
+            passPerc: 10 + mods.wis + (selectedSkills.includes('Perception') ? pb : 0)
+        };
+
+        renderStatBlock(currentCharacter);
+    }
+
+    function renderStatBlock(npc) {
+        let html = `
+            <div class="stat-sheet">
+                <div class="sheet-header">
+                    <h1>${npc.name}</h1>
+                    <div class="sheet-meta">Medium humanoid (${npc.race} ${npc.cls}), Any Alignment</div>
+                </div>
+
+                <div class="sheet-property"><strong>Armor Class</strong> ${npc.ac} (${npc.armKey})</div>
+                <div class="sheet-property"><strong>Hit Points</strong> ${npc.hp} (${npc.level}d${npc.hd} + ${npc.level * npc.mods.con})</div>
+                <div class="sheet-property"><strong>Speed</strong> 30 ft.</div>
+
+                <div class="attr-grid">
+                    <div class="attr-box"><div class="attr-name">STR</div><div class="attr-score">${npc.stats.str}</div><div class="attr-mod">${formatMod(npc.mods.str)}</div></div>
+                    <div class="attr-box"><div class="attr-name">DEX</div><div class="attr-score">${npc.stats.dex}</div><div class="attr-mod">${formatMod(npc.mods.dex)}</div></div>
+                    <div class="attr-box"><div class="attr-name">CON</div><div class="attr-score">${npc.stats.con}</div><div class="attr-mod">${formatMod(npc.mods.con)}</div></div>
+                    <div class="attr-box"><div class="attr-name">INT</div><div class="attr-score">${npc.stats.int}</div><div class="attr-mod">${formatMod(npc.mods.int)}</div></div>
+                    <div class="attr-box"><div class="attr-name">WIS</div><div class="attr-score">${npc.stats.wis}</div><div class="attr-mod">${formatMod(npc.mods.wis)}</div></div>
+                    <div class="attr-box"><div class="attr-name">CHA</div><div class="attr-score">${npc.stats.cha}</div><div class="attr-mod">${formatMod(npc.mods.cha)}</div></div>
+                </div>
+
+                ${npc.saves ? `<div class="sheet-property"><strong>Saving Throws</strong> ${npc.saves}</div>` : ''}
+                ${npc.skills ? `<div class="sheet-property"><strong>Skills</strong> ${npc.skills}</div>` : ''}
+                <div class="sheet-property"><strong>Passive Perception</strong> ${npc.passPerc}</div>
+                <div class="sheet-property"><strong>Challenge</strong> ${npc.level} (Proficiency Bonus +${npc.pb})</div>
+
+                <div class="sheet-divider"></div>
+
+                ${npc.features && npc.features.length ? npc.features.map(f => `<div class="sheet-property"><strong>${f.name}.</strong> ${f.desc}</div>`).join('') : ''}
+
+                <div class="section-title">Actions</div>
+                
+                ${npc.level >= 5 ? `<div class="action-block"><strong>Multiattack.</strong> <p>The entity makes two melee or ranged weapon attacks per turn.</p></div>` : ''}
+                
+                <div class="action-block">
+                    <strong>${npc.wpKey}${npc.magicBonus ? ` (+${npc.magicBonus})` : ''}.</strong> 
+                    <p><em>Melee or Ranged Weapon Attack:</em> ${formatMod(npc.atkBonus)} to hit, reach ${npc.wp.reach ? '10' : '5'} ft. or range 20/60 ft., one target. <em>Hit:</em> ${npc.wp.dmg} ${formatMod(npc.dmgBonus)} ${npc.wp.type} damage${npc.wp.extraDmg || ''}.</p>
+                </div>
+
+                ${npc.spellData ? `
+                <div class="sheet-divider"></div>
+                <div class="section-title">Spellcasting</div>
+                <div class="sheet-property" style="margin-bottom: 1rem;">
+                    The NPC is a spellcaster. Its spellcasting ability is ${npc.spellData.stat} (spell save DC ${npc.spellData.dc}). It has the following spells prepared:
+                </div>
+                ${npc.spellData.spells.map(s => `<div class="action-block"><strong>${s.name}.</strong> <p>${s.desc}</p></div>`).join('')}
+                ` : ''}
+
+                ${npc.isBoss ? `
+                <div class="sheet-divider"></div>
+                <div class="section-title" style="color: #ff453a; border-color: #ff453a;">Legendary Actions</div>
+                <div class="sheet-property" style="margin-bottom: 1rem;">The boss can take 3 legendary actions, choosing from the options below. Only one legendary action option can be used at a time and only at the end of another creature's turn.</div>
+                <div class="action-block"><strong>Move.</strong> <p>The boss moves up to its speed without provoking opportunity attacks.</p></div>
+                <div class="action-block"><strong>Strike.</strong> <p>The boss makes one weapon attack.</p></div>
+                <div class="action-block"><strong>Command.</strong> <p>The boss directs an ally to strike, granting them a reaction to make one weapon attack.</p></div>
+                ` : ''}
+            </div>
+        `;
+
+        document.getElementById('stat-block-render').innerHTML = html;
+    }
+
+    function downloadFile(content, fileName, contentType) {
+        const a = document.createElement("a");
+        const file = new Blob([content], {type: contentType});
+        a.href = URL.createObjectURL(file); a.download = fileName; a.click();
+    }
+    function exportJSON() { if (currentCharacter) downloadFile(JSON.stringify(currentCharacter, null, 2), `${currentCharacter.name.replace(/\s+/g, '_')}_data.json`, 'application/json'); }
+
+    window.onload = initUI;
+</script>
 </body>
 </html>
