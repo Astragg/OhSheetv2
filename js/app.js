@@ -1,8 +1,5 @@
 document.addEventListener('DOMContentLoaded', () => {
-    // Specify the JSON file you want to load here. 
-    // You can later make this dynamic via URL parameters (e.g., ?npc=boss)
-    const npcFile = 'data/character.json';
-    loadNPCData(npcFile);
+    loadNPCData('data/character.json');
 });
 
 async function loadNPCData(fileUrl) {
@@ -16,39 +13,55 @@ async function loadNPCData(fileUrl) {
         renderNPC(npc, container);
     } catch (error) {
         console.error("Failed to load NPC:", error);
-        container.innerHTML = `<div class="empty-state">Error loading NPC data. Ensure you are running this on a web server (like GitHub Pages) and that ${fileUrl} exists.</div>`;
+        container.innerHTML = `<div class="empty-state">Error loading NPC data. Ensure you are running on a web server.</div>`;
     }
 }
 
 function renderNPC(npc, container) {
-    // Format modifiers to safely include the '+' or '-' sign
     const formatMod = (mod) => mod >= 0 ? `+${mod}` : mod;
     
-    // Helper function to build lists (Features, Actions, Reactions, Spells)
-    const buildList = (arr, emptyMsg) => {
-        if (!arr || arr.length === 0) return `<div class="empty-state">${emptyMsg}</div>`;
-        return `<div class="item-list">` + arr.map(item => `
+    // Helper to render comma-separated property lines (e.g. "Damage Resistances: fire, cold")
+    const renderProp = (title, arr) => {
+        if (!arr || arr.length === 0) return '';
+        return `<div class="prop-line"><strong>${title}</strong> ${arr.join(', ')}</div>`;
+    };
+
+    // Helper to render action lists (Traits, Actions, Bonus Actions, Reactions)
+    const renderActionList = (title, arr, headerText = '') => {
+        if (!arr || arr.length === 0) return '';
+        let html = `<h2>${title}</h2>`;
+        if (headerText) html += `<div class="item desc-header">${headerText}</div>`;
+        html += `<div class="item-list">` + arr.map(item => `
             <div class="item">
                 <strong>${item.name}.</strong> ${item.description}
             </div>
         `).join('') + `</div>`;
+        return html;
     };
 
-    // Subtitle logic
-    const raceStr = npc.race ? `${npc.race} ` : '';
-    const classStr = npc.class ? npc.class : 'NPC';
+    // Helper for Spells
+    const renderSpells = (spellData) => {
+        if (!spellData || !spellData.lists || spellData.lists.length === 0) return '';
+        let html = `<h2>Spellcasting</h2>`;
+        if (spellData.header) html += `<div class="item desc-header">${spellData.header}</div>`;
+        html += `<div class="item-list">` + spellData.lists.map(list => `
+            <div class="item">
+                <strong>${list.level}:</strong> <em>${list.spells.join(', ')}</em>
+            </div>
+        `).join('') + `</div>`;
+        return html;
+    };
 
-    // Build the final HTML string
     container.innerHTML = `
         <header>
             <h1>${npc.name || 'Unnamed NPC'}</h1>
-            <div class="subtitle">Level ${npc.level} ${raceStr}${classStr}</div>
+            <div class="subtitle">${npc.meta.size} ${npc.meta.type}, ${npc.meta.alignment}</div>
         </header>
 
         <div class="combat-stats">
-            <div><strong>Armor Class:</strong> ${npc.ac}</div>
-            <div><strong>Hit Points:</strong> ${npc.hp}</div>
-            <div><strong>Proficiency:</strong> ${npc.proficiency}</div>
+            <div><strong>Armor Class:</strong> ${npc.armor_class.value} ${npc.armor_class.description ? `(${npc.armor_class.description})` : ''}</div>
+            <div><strong>Hit Points:</strong> ${npc.hit_points.value} (${npc.hit_points.dice})</div>
+            <div><strong>Speed:</strong> ${npc.speed}</div>
         </div>
 
         <div class="stats-grid">
@@ -61,31 +74,26 @@ function renderNPC(npc, container) {
             `).join('')}
         </div>
 
-        ${npc.saving_throws.length > 0 || npc.skills.length > 0 ? `
-            <h2>Proficiencies</h2>
-            <div class="item-list">
-                ${npc.saving_throws.length > 0 ? `<div class="item"><strong>Saving Throws:</strong> ${npc.saving_throws.join(', ')}</div>` : ''}
-                ${npc.skills.length > 0 ? `<div class="item"><strong>Skills:</strong> ${npc.skills.join(', ')}</div>` : ''}
+        <div class="properties-section">
+            ${renderProp('Saving Throws', npc.saving_throws)}
+            ${renderProp('Skills', npc.skills)}
+            ${renderProp('Damage Vulnerabilities', npc.vulnerabilities)}
+            ${renderProp('Damage Resistances', npc.resistances)}
+            ${renderProp('Damage Immunities', npc.immunities)}
+            ${renderProp('Condition Immunities', npc.condition_immunities)}
+            ${renderProp('Senses', npc.senses)}
+            ${renderProp('Languages', npc.languages)}
+            <div class="prop-line">
+                <strong>Challenge</strong> ${npc.challenge.cr} (${npc.challenge.xp} XP) 
+                <span style="float:right;"><strong>Proficiency Bonus</strong> ${npc.challenge.proficiency}</span>
             </div>
-        ` : ''}
+        </div>
 
-        <h2>Features</h2>
-        ${buildList(npc.features, 'No special features.')}
-
-        <h2>Actions</h2>
-        ${buildList(npc.actions, 'No actions defined.')}
-
-        <h2>Reactions</h2>
-        ${buildList(npc.reactions, 'No reactions available.')}
-
-        ${npc.legendary_actions && npc.legendary_actions.length > 0 ? `
-            <h2>Legendary Actions</h2>
-            ${buildList(npc.legendary_actions, '')}
-        ` : ''}
-
-        ${npc.spells && npc.spells.length > 0 ? `
-            <h2>Spells</h2>
-            ${buildList(npc.spells, '')}
-        ` : ''}
+        ${renderActionList('Traits', npc.traits)}
+        ${renderSpells(npc.spellcasting)}
+        ${renderActionList('Actions', npc.actions)}
+        ${renderActionList('Bonus Actions', npc.bonus_actions)}
+        ${renderActionList('Reactions', npc.reactions)}
+        ${npc.legendary_actions ? renderActionList('Legendary Actions', npc.legendary_actions.actions, npc.legendary_actions.header) : ''}
     `;
 }
